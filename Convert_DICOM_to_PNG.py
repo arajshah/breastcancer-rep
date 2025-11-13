@@ -9,7 +9,7 @@
 # One full image might have multiple ROIs. It was important to add different suffixes, prefixes, etc., while keeping the Subject ID the same while saving the converted images.
 
 # Install pydicom if needed
-!pip install pydicom
+# !pip install pydicom
 # Load modules
 import os
 import cv2
