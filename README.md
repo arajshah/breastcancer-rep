@@ -1,4 +1,4 @@
-## breastcancer-rep (revival in progress)
+## breastcancer-rep
 
 This repository is an ML pipeline for **breast cancer classification from mammography** using the **CBIS-DDSM Mass** subset (binary: **BENIGN vs MALIGNANT**).
 
@@ -54,6 +54,27 @@ python scripts/crop_centered.py \
   --output-dir ./cropped_pngs \
   --out-manifest ./manifest_with_images_cropped.csv \
   --size 598
+```
+
+### Cleanup + augmentation (Pillow-only)
+
+Remove pure-white pixels (common “white edge” artifact) from a folder:
+
+```bash
+python scripts/remove_white_edges.py \
+  --input-dir ./cropped_pngs \
+  --output-dir ./cropped_clean \
+  --white-value -1
+```
+
+Generate deterministic augmentations (no keras/numpy required):
+
+```bash
+python scripts/augment_images.py \
+  --input-dir ./cropped_clean \
+  --output-dir ./augmented \
+  --n 5 \
+  --seed 42
 ```
 
 ### Repo structure (new)
