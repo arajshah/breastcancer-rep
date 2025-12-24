@@ -15,6 +15,15 @@ Usage example:
         --output-root /Users/.../processed_png/dataset_splits \
         --val-size 0.1 \
         --test-size 0.1
+
+DEPRECATED (revival):
+This script is kept for reference, but the repo is moving to a manifest-first workflow:
+  1) Build a canonical manifest from CBIS-DDSM metadata:
+       python scripts/build_manifest_from_cbis_csv.py --mass-train-csv ... --mass-test-csv ... --out-manifest manifest.csv
+  2) Assign patient-level splits (anti-leakage):
+       python scripts/assign_splits.py --in-manifest manifest.csv --out-manifest manifest_splits.csv
+  3) Materialize torchvision ImageFolder layout when images exist:
+       python scripts/materialize_imagefolder.py --manifest manifest_splits.csv --output-root dataset_splits --mode symlink
 """
 
 from __future__ import annotations
