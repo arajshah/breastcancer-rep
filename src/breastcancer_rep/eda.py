@@ -106,3 +106,4 @@ def write_stats_csv(path: Path, rows: list[ImageStatRow]) -> None:
 
 
 
+
