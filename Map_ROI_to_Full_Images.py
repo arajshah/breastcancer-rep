@@ -4,6 +4,19 @@
 # Map ROI to the full image                                                                     #
 #################################################################################################
 
+# DEPRECATED (revival):
+# This file is a Colab-style research script (hardcoded /content paths, pandas dependency).
+# Use the new portable CLI instead:
+#
+# Folder mode:
+#   python scripts/map_roi_to_full.py --roi-dir <roi_png_dir> --full-dir <full_png_dir> --output-dir <out_dir> \
+#     --mismatch-csv mismatches.csv
+#
+# Manifest mode (configure column names as needed):
+#   python scripts/map_roi_to_full.py --in-manifest manifest.csv --full-col full_image_path --mask-col roi_mask_path \
+#     --output-dir overlays --out-manifest manifest_with_overlays.csv --out-col overlay_path
+#
+
 # Load modules
 import os
 import re
