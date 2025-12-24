@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -119,6 +120,11 @@ def main() -> None:
     for p in [paths.data_dir, paths.reports_dir, paths.images_dir, paths.cropped_dir, paths.cleaned_dir, paths.augmented_dir]:
         p.mkdir(parents=True, exist_ok=True)
 
+    # Save run config snapshot for reproducibility
+    run_cfg_path = paths.run_dir / "run_config.json"
+    with run_cfg_path.open("w", encoding="utf-8") as f:
+        json.dump(vars(args), f, indent=2, default=str)
+
     # 1) Get starting manifest (with image_path)
     if args.toy:
         base_manifest = generate_toy_dataset(
@@ -138,6 +144,13 @@ def main() -> None:
         rows = read_manifest_csv(args.in_manifest)
         write_manifest_csv(rows, paths.manifest_base)
         rows = read_manifest_csv(paths.manifest_base)
+        # Guardrail: manifest mode must have some images, otherwise downstream steps are meaningless.
+        has_any = any((r.get("image_path") or "").strip() != "" for r in rows)
+        if not has_any:
+            raise RuntimeError(
+                "Manifest mode requires image_path values. "
+                "Use scripts/attach_image_paths.py first, or provide a manifest that already has image_path."
+            )
 
     # 2) Crop -> cleaned -> augment (update manifest pointers)
     processed_rows = []
@@ -214,6 +227,7 @@ def main() -> None:
         )
 
     print(f"OK: pipeline complete -> {paths.run_dir}")
+    print(f"Run config saved -> {run_cfg_path}")
 
 
 if __name__ == "__main__":
