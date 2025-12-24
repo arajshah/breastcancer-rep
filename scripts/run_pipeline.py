@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import sys
+import platform
+import random as pyrandom
 
 # Allow running without installing the package
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -74,6 +76,12 @@ def build_paths(run_dir: Path) -> RunPaths:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run an end-to-end pipeline into a single run directory.")
+    p.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Optional JSON config file. CLI args override config values.",
+    )
     p.add_argument("--runs-root", type=Path, default=Path("runs"))
     p.add_argument("--run-name", type=str, default=None)
 
@@ -93,11 +101,80 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--val-frac", type=float, default=0.1)
     p.add_argument("--test-frac", type=float, default=0.1)
     p.add_argument("--materialize-mode", choices=["symlink", "copy"], default="symlink")
+    p.add_argument("--max-patients", type=int, default=0, help="0 = no limit; otherwise sample N patient_ids.")
+    p.add_argument("--max-images", type=int, default=0, help="0 = no limit; otherwise take first N rows after filtering.")
 
     # optional training hooks
     p.add_argument("--train-resnet", action="store_true", help="Attempt to run ResNet training script after materialization.")
     p.add_argument("--train-convnext", action="store_true", help="Attempt to run ConvNeXt training script after materialization.")
     return p.parse_args()
+
+
+def _load_json_config(path: Path) -> dict:
+    with path.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def parse_args_with_config() -> argparse.Namespace:
+    """
+    Two-pass parsing:
+    - parse --config (if any)
+    - apply config defaults
+    - parse full CLI (CLI overrides)
+    """
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--config", type=Path, default=None)
+    pre_args, _ = pre.parse_known_args()
+
+    cfg = {}
+    if pre_args.config is not None:
+        cfg = _load_json_config(pre_args.config)
+
+    p = argparse.ArgumentParser(description="Run an end-to-end pipeline into a single run directory.")
+    # re-declare all args with defaults from cfg
+    p.add_argument("--config", type=Path, default=pre_args.config)
+    p.add_argument("--runs-root", type=Path, default=Path(cfg.get("runs_root", "runs")))
+    p.add_argument("--run-name", type=str, default=cfg.get("run_name", None))
+
+    mode = p.add_mutually_exclusive_group(required=False)
+    mode.add_argument("--toy", action="store_true", default=bool(cfg.get("toy", False)))
+    mode.add_argument("--in-manifest", type=Path, default=(Path(cfg["in_manifest"]) if "in_manifest" in cfg and cfg["in_manifest"] else None))
+
+    p.add_argument("--toy-patients", type=int, default=int(cfg.get("toy_patients", 20)))
+    p.add_argument("--toy-images-per-patient", type=int, default=int(cfg.get("toy_images_per_patient", 2)))
+    p.add_argument("--toy-image-size", type=int, default=int(cfg.get("toy_image_size", 128)))
+
+    p.add_argument("--crop-size", type=int, default=int(cfg.get("crop_size", 128)))
+    p.add_argument("--augment-n", type=int, default=int(cfg.get("augment_n", 2)))
+    p.add_argument("--seed", type=int, default=int(cfg.get("seed", 42)))
+    p.add_argument("--val-frac", type=float, default=float(cfg.get("val_frac", 0.1)))
+    p.add_argument("--test-frac", type=float, default=float(cfg.get("test_frac", 0.1)))
+    p.add_argument("--materialize-mode", choices=["symlink", "copy"], default=str(cfg.get("materialize_mode", "symlink")))
+    p.add_argument("--max-patients", type=int, default=int(cfg.get("max_patients", 0)))
+    p.add_argument("--max-images", type=int, default=int(cfg.get("max_images", 0)))
+
+    p.add_argument("--train-resnet", action="store_true", default=bool(cfg.get("train_resnet", False)))
+    p.add_argument("--train-convnext", action="store_true", default=bool(cfg.get("train_convnext", False)))
+
+    args = p.parse_args()
+    # Validate mode is set
+    if not args.toy and args.in_manifest is None:
+        p.error("one of --toy or --in-manifest is required (can be provided via --config).")
+    return args
+
+
+def subset_rows(rows: list[dict[str, str]], *, seed: int, max_patients: int, max_images: int) -> list[dict[str, str]]:
+    out = [dict(r) for r in rows]
+    if max_patients and max_patients > 0:
+        # sample patient_ids deterministically
+        patient_ids = sorted({(r.get("patient_id") or "").strip() for r in out if (r.get("patient_id") or "").strip() != ""})
+        rng = pyrandom.Random(seed)
+        rng.shuffle(patient_ids)
+        keep = set(patient_ids[: max_patients])
+        out = [r for r in out if (r.get("patient_id") or "").strip() in keep]
+    if max_images and max_images > 0:
+        out = out[: max_images]
+    return out
 
 
 def try_run_training(script: Path, args: list[str]) -> None:
@@ -112,7 +189,7 @@ def try_run_training(script: Path, args: list[str]) -> None:
 
 
 def main() -> None:
-    args = parse_args()
+    args = parse_args_with_config()
     run_dir = make_run_dir(args.runs_root, args.run_name)
     paths = build_paths(run_dir)
 
@@ -123,7 +200,10 @@ def main() -> None:
     # Save run config snapshot for reproducibility
     run_cfg_path = paths.run_dir / "run_config.json"
     with run_cfg_path.open("w", encoding="utf-8") as f:
-        json.dump(vars(args), f, indent=2, default=str)
+        payload = dict(vars(args))
+        payload["python_version"] = sys.version
+        payload["platform"] = platform.platform()
+        json.dump(payload, f, indent=2, default=str)
 
     # 1) Get starting manifest (with image_path)
     if args.toy:
@@ -151,6 +231,10 @@ def main() -> None:
                 "Manifest mode requires image_path values. "
                 "Use scripts/attach_image_paths.py first, or provide a manifest that already has image_path."
             )
+
+    # Optional subsetting for fast iteration
+    rows = subset_rows(rows, seed=args.seed, max_patients=args.max_patients, max_images=args.max_images)
+    write_manifest_csv(rows, paths.manifest_base)
 
     # 2) Crop -> cleaned -> augment (update manifest pointers)
     processed_rows = []
