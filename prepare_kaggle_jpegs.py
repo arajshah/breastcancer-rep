@@ -2,10 +2,9 @@
 Utility script to adapt the Kaggle CBIS-DDSM JPEG mirror to the PNG-based
 pipeline provided in this repository.
 
-The original code expects DICOM files. The Kaggle release already converted
-those DICOM objects to JPEGs and ships helpful metadata (dicom_info.csv). This
-script reads that metadata, finds the JPEG counterparts for each series, and
-exports them as PNG files grouped by series type (full, cropped ROI, ROI mask).
+The Kaggle release already converted those DICOM objects to JPEGs and ships 
+helpful metadata (dicom_info.csv). This script reads that metadata, finds the 
+JPEG counterparts for each series, and exports them as PNG files grouped by series type (full, cropped ROI, ROI mask).
 
 Usage (from the repository root):
 
