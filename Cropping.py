@@ -2,14 +2,6 @@
 # Crop 598 by 598 pixel area #
 ##############################
 
-# DEPRECATED (revival):
-# This script was originally written for Colab-style paths and pixel loops.
-# Use the new CLI instead (fast, pads at borders, supports manifests):
-#
-#   python scripts/crop_centered.py --input-dir <dir> --output-dir <dir> --size 598
-#   python scripts/crop_centered.py --in-manifest <manifest.csv> --output-dir <dir> --out-manifest <manifest_out.csv>
-#
-
 # Load modules
 import os
 from PIL import Image

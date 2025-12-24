@@ -2,14 +2,6 @@
 # Image augmentation #
 ######################
 
-# DEPRECATED (revival):
-# This script depends on keras/numpy and assumes 16-bit scaling, and uses Colab paths.
-# Use the new Pillow-only augmentation CLI instead:
-#
-#   python scripts/augment_images.py --input-dir <png_dir> --output-dir <aug_dir> --n 5 --seed 42
-#   python scripts/augment_images.py --in-manifest <manifest.csv> --output-dir <aug_dir> --n 5 --out-manifest <manifest_aug.csv>
-#
-
 # Load modules
 import os
 import cv2

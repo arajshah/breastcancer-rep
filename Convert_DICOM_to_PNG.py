@@ -1,8 +1,6 @@
 """
 Convert CBIS-DDSM DICOM files to PNG files (portable CLI).
 
-This replaces the original Colab-only notebook export (which used `google.colab` and `!unzip`).
-
 Typical usage:
 
   python Convert_DICOM_to_PNG.py \
