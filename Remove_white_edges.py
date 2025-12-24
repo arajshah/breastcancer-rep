@@ -5,6 +5,14 @@
 # It shall be conveninent/quick if we choose to view all the images under Gallery view
 # We then applied below code to remove the white edges
 
+# DEPRECATED (revival):
+# This script uses slow pixel-by-pixel loops and hardcoded /content paths.
+# Use the new portable CLI instead:
+#
+#   python scripts/remove_white_edges.py --input-dir <png_dir> --output-dir <clean_dir> --white-value -1
+#   python scripts/remove_white_edges.py --in-manifest <manifest.csv> --output-dir <clean_dir> --out-manifest <manifest_out.csv>
+#
+
 # Load modules
 import os
 from PIL import Image
