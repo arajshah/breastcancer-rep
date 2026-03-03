@@ -3,4 +3,8 @@
 example_output
 __pycache__
 mismated_image_info.csv
-README.md
+/.smoke_run
+/.smoke_run2
+/.smoke_run3
+/.smoke_run*
+/.test_run_materialize
