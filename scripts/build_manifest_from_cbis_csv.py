@@ -2,17 +2,10 @@ from __future__ import annotations
 
 import argparse
 import csv
-import sys
 from pathlib import Path
 
-# Allow running without installing the package
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = REPO_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
-
-from breastcancer_rep.cbis import parse_cbis_patient_id  # noqa: E402
-from breastcancer_rep.manifest import normalize_pathology, write_manifest_csv  # noqa: E402
+from breastcancer_rep.cbis import parse_cbis_patient_id
+from breastcancer_rep.manifest import assert_manifest_contract, normalize_pathology, write_manifest_csv
 
 
 def parse_args() -> argparse.Namespace:
@@ -100,6 +93,13 @@ def main() -> None:
     if not manifest_rows:
         raise RuntimeError("No labeled rows found. Check input CSVs and column names.")
 
+    assert_manifest_contract(
+        manifest_rows,
+        require_labels=True,
+        require_patient_ids=True,
+        require_image_paths=False,
+        require_splits=False,
+    )
     write_manifest_csv(manifest_rows, args.out_manifest)
     print("OK: wrote manifest")
     print(f"- rows: {len(manifest_rows)}")

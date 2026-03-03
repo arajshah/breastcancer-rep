@@ -1,10 +1,21 @@
-/Others
-/image_with_white_edge
-example_output
-__pycache__
-mismated_image_info.csv
-/.smoke_run
-/.smoke_run2
-/.smoke_run3
+.DS_Store
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# Local legacy outputs
+/Others/
+/image_with_white_edge/
+/example_output/
+/mismated_image_info.csv
+
+# Generated run artifacts
+/runs/smoke/**
+/runs/test/**
+!/runs/smoke/.gitkeep
+!/runs/test/.gitkeep
+
+# Backward-compatible old temp outputs
 /.smoke_run*
-/.test_run_materialize
+/.test*
+/runs_test_tmp*

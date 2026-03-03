@@ -1,88 +1,92 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 
-@dataclass(frozen=True)
-class AttachStats:
-    total_rows: int
-    matched_rows: int
-    unmatched_rows: int
-    ambiguous_rows: int
-
-
-def index_pngs_by_patient_id(images_dir: Path) -> dict[str, list[Path]]:
+def _candidate_names(row: dict[str, str]) -> list[str]:
     """
-    Build index patient_id -> list[png paths].
-
-    Supports the naming scheme produced by prepare_kaggle_jpegs.py:
-      {PatientID}_{SeriesInstanceUID}_{InstanceNumber}.png
-    where SeriesInstanceUID typically begins with "1.3...", making "_1.3." a stable delimiter.
+    Build filename candidates from manifest pointers.
+    Priority:
+    1) existing image_path filename
+    2) source_image_file_path filename
+    3) sample_id + .png
     """
-    idx: dict[str, list[Path]] = {}
-    for p in images_dir.glob("*.png"):
-        stem = p.stem
-        if "_1.3." in stem:
-            patient_id = stem.split("_1.3.", 1)[0]
-        else:
-            # fallback: no UID delimiter; use full stem (useful for toy/small cases)
-            patient_id = stem
-        idx.setdefault(patient_id, []).append(p)
+    out: list[str] = []
+    image_path = (row.get("image_path") or "").strip()
+    source_image = (row.get("source_image_file_path") or "").strip()
+    sample_id = (row.get("sample_id") or "").strip()
+
+    if image_path:
+        out.append(Path(image_path).name)
+    if source_image:
+        out.append(Path(source_image).name)
+    if sample_id:
+        out.append(f"{sample_id}.png")
+
+    # Preserve order but de-duplicate.
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for name in out:
+        if name not in seen:
+            deduped.append(name)
+            seen.add(name)
+    return deduped
+
+
+def _build_file_index(image_roots: list[Path]) -> dict[str, Path]:
+    """
+    Index png files by basename across provided roots.
+    If duplicates exist, first encountered path wins.
+    """
+    idx: dict[str, Path] = {}
+    for root in image_roots:
+        if not root.exists():
+            continue
+        for p in root.rglob("*.png"):
+            idx.setdefault(p.name, p)
     return idx
 
 
 def attach_image_paths(
-    manifest_rows: list[dict[str, str]],
+    rows: list[dict[str, str]],
     *,
-    images_dir: Path,
-    patient_id_col: str = "patient_id",
-    out_col: str = "image_path",
-    choose: str = "first",
-) -> tuple[list[dict[str, str]], AttachStats]:
+    image_roots: list[Path],
+    overwrite: bool = False,
+    strict: bool = False,
+) -> tuple[list[dict[str, str]], int, int]:
     """
-    Attach image paths to manifest rows by matching patient_id to PNG filenames.
+    Attach image_path values by matching candidate filenames to image roots.
 
-    - choose="first": if multiple PNGs match a patient_id key, pick the lexicographically first.
+    Returns: (updated_rows, n_attached, n_missing)
     """
-    if choose not in {"first"}:
-        raise ValueError("choose must be 'first'")
+    if not image_roots:
+        raise ValueError("image_roots must be non-empty.")
+    idx = _build_file_index(image_roots)
 
-    idx = index_pngs_by_patient_id(images_dir)
-    updated: list[dict[str, str]] = []
-    matched = 0
-    unmatched = 0
-    ambiguous = 0
-
-    for r in manifest_rows:
-        rr = dict(r)
-        pid = (rr.get(patient_id_col) or "").strip()
-        if pid == "":
-            updated.append(rr)
-            unmatched += 1
+    out: list[dict[str, str]] = []
+    n_attached = 0
+    n_missing = 0
+    for row in rows:
+        rr = dict(row)
+        current = (rr.get("image_path") or "").strip()
+        if current and not overwrite:
+            out.append(rr)
             continue
 
-        matches = idx.get(pid, [])
-        if not matches:
-            updated.append(rr)
-            unmatched += 1
-            continue
+        chosen: Path | None = None
+        for name in _candidate_names(rr):
+            chosen = idx.get(name)
+            if chosen is not None:
+                break
 
-        if len(matches) > 1:
-            ambiguous += 1
-        if choose == "first":
-            chosen = sorted(matches)[0]
-        rr[out_col] = str(chosen)
-        updated.append(rr)
-        matched += 1
+        if chosen is None:
+            n_missing += 1
+        else:
+            rr["image_path"] = str(chosen.resolve())
+            n_attached += 1
+        out.append(rr)
 
-    stats = AttachStats(
-        total_rows=len(manifest_rows),
-        matched_rows=matched,
-        unmatched_rows=unmatched,
-        ambiguous_rows=ambiguous,
-    )
-    return updated, stats
-
-
+    if strict and n_missing > 0:
+        raise RuntimeError(f"Failed to attach {n_missing} manifest rows to image files.")
+    return out, n_attached, n_missing
 

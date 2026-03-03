@@ -18,7 +18,7 @@ from breastcancer_rep.toydata import ToyDataSpec, generate_toy_dataset  # noqa: 
 
 class TestImageFolderMaterialize(unittest.TestCase):
     def test_materialize_symlinks(self) -> None:
-        workdir = REPO_ROOT / ".test_run_materialize"
+        workdir = REPO_ROOT / "runs" / "test" / "materialize"
         if workdir.exists():
             # simple cleanup
             for p in sorted(workdir.rglob("*"), reverse=True):

@@ -1,60 +1,80 @@
 from __future__ import annotations
 
+import json
+import subprocess
 import sys
 import unittest
 from pathlib import Path
-
-# We call the script as a subprocess so we don't rely on imports working inside tests.
-import subprocess
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class TestPipelineRunner(unittest.TestCase):
-    def test_toy_pipeline_writes_artifacts(self) -> None:
-        run_name = ".test_pipeline_run"
-        runs_root = REPO_ROOT / "runs_test_tmp"
-        if runs_root.exists():
-            for p in sorted(runs_root.rglob("*"), reverse=True):
-                if p.is_file() or p.is_symlink():
-                    p.unlink()
-                else:
-                    p.rmdir()
-            runs_root.rmdir()
+    def test_rejects_unknown_config_keys(self) -> None:
+        cfg_path = REPO_ROOT / "runs" / "test" / "run_pipeline_bad_cfg.json"
+        cfg_path.parent.mkdir(parents=True, exist_ok=True)
+        cfg_path.write_text(json.dumps({"toy": True, "unknown_key": 1}), encoding="utf-8")
+        cmd = [sys.executable, "scripts/run_pipeline.py", "--config", str(cfg_path)]
+        proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("Unknown config keys", proc.stderr + proc.stdout)
 
+    def test_writes_summary_with_stage_toggles(self) -> None:
+        run_name = "phase4_test_summary"
         cmd = [
             sys.executable,
-            str(REPO_ROOT / "scripts" / "run_pipeline.py"),
+            "scripts/run_pipeline.py",
             "--toy",
-            "--runs-root",
-            str(runs_root),
             "--run-name",
             run_name,
+            "--runs-root",
+            "./runs/test",
+            "--skip-eda",
+            "--skip-materialize",
+            "--augment-n",
+            "0",
             "--toy-patients",
             "6",
             "--toy-images-per-patient",
             "1",
-            "--toy-image-size",
-            "64",
-            "--crop-size",
-            "64",
-            "--augment-n",
-            "1",
-            "--seed",
-            "7",
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        self.assertEqual(res.returncode, 0, msg=res.stderr)
+        proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr + proc.stdout)
+        summary = REPO_ROOT / "runs" / "test" / run_name / "reports" / "pipeline_summary.json"
+        self.assertTrue(summary.exists())
+        payload = json.loads(summary.read_text(encoding="utf-8"))
+        stage_names = {s["name"] for s in payload["stage_results"]}
+        self.assertIn("preprocess", stage_names)
+        self.assertIn("eda", stage_names)
+        self.assertIn("materialize", stage_names)
 
-        run_dir = runs_root / run_name
-        self.assertTrue((run_dir / "data" / "manifest_splits.csv").exists())
-        self.assertTrue((run_dir / "data" / "dataset_splits" / "train").exists())
-        self.assertTrue((run_dir / "reports" / "image_stats.csv").exists())
+    def test_strict_splits_fails_on_tiny_data(self) -> None:
+        cmd = [
+            sys.executable,
+            "scripts/run_pipeline.py",
+            "--toy",
+            "--run-name",
+            "phase4_test_strict_split",
+            "--runs-root",
+            "./runs/test",
+            "--toy-patients",
+            "4",
+            "--toy-images-per-patient",
+            "1",
+            "--augment-n",
+            "0",
+            "--strict-splits",
+            "--val-frac",
+            "0.34",
+            "--test-frac",
+            "0.34",
+        ]
+        proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("Strict split policy failed", proc.stderr + proc.stdout)
 
 
 if __name__ == "__main__":
     unittest.main()
-
-
 

@@ -1,23 +1,20 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-# Allow running this script without installing the package:
-#   python scripts/smoke_pipeline.py ...
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = REPO_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
-
-from breastcancer_rep.manifest import assert_manifest_schema, read_manifest_csv, write_manifest_csv  # noqa: E402
-from breastcancer_rep.splitting import (  # noqa: E402
+from breastcancer_rep.manifest import (
+    assert_manifest_contract,
+    assert_manifest_schema,
+    read_manifest_csv,
+    write_manifest_csv,
+)
+from breastcancer_rep.splitting import (
     SplitFractions,
     assert_no_patient_leakage,
     assign_patient_splits,
 )
-from breastcancer_rep.toydata import ToyDataSpec, generate_toy_dataset  # noqa: E402
+from breastcancer_rep.toydata import ToyDataSpec, generate_toy_dataset
 
 
 def parse_args() -> argparse.Namespace:
@@ -43,11 +40,25 @@ def main() -> None:
     manifest_path = generate_toy_dataset(args.workdir, seed=args.seed, spec=spec)
     df = read_manifest_csv(manifest_path)
     assert_manifest_schema(df)
+    assert_manifest_contract(
+        df,
+        require_labels=True,
+        require_patient_ids=True,
+        require_image_paths=True,
+        require_splits=False,
+    )
 
     df = assign_patient_splits(
         df, seed=args.seed, fractions=SplitFractions(val=args.val_frac, test=args.test_frac)
     )
     assert_no_patient_leakage(df)
+    assert_manifest_contract(
+        df,
+        require_labels=True,
+        require_patient_ids=True,
+        require_image_paths=True,
+        require_splits=True,
+    )
 
     # Basic integrity checks
     missing_path_rows = [r for r in df if r.get("image_path", "") == ""]

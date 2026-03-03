@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import random
 from typing import Literal
 
+from .manifest import ALLOWED_LABELS, ALLOWED_SPLITS
+
 
 SplitName = Literal["train", "val", "test"]
 
@@ -44,6 +46,8 @@ def assign_patient_splits(
     for r in rows:
         if r.get(label_col, "") == "":
             raise ValueError("Manifest contains empty labels; normalize labels before splitting.")
+        if str(r.get(label_col, "")) not in ALLOWED_LABELS:
+            raise ValueError(f"Manifest contains unsupported label value: {r.get(label_col)!r}")
         if r.get(patient_col, "") == "":
             raise ValueError("Manifest contains empty patient_id values.")
 
@@ -105,6 +109,8 @@ def assert_no_patient_leakage(rows: list[dict[str, str]], patient_col: str = "pa
         sp = r.get("split", "")
         if pid == "" or sp == "":
             raise ValueError("Missing patient_id or split in manifest rows.")
+        if sp not in ALLOWED_SPLITS:
+            raise ValueError(f"Unsupported split value: {sp!r}")
         seen.setdefault(pid, set()).add(sp)
 
     leaked = {pid: s for pid, s in seen.items() if len(s) > 1}

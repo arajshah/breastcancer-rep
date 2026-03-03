@@ -22,7 +22,7 @@ From repo root:
 python -m pip install -e ".[dev,analysis,ml]"
 ```
 
-If you want to run scripts without installing, you can use `PYTHONPATH=./src` (examples below).
+After installing, run CLIs directly with `python scripts/<name>.py ...`.
 
 ### Quickstart (no dataset download required)
 
@@ -32,20 +32,20 @@ This generates a tiny synthetic dataset under `--workdir` and validates:
 - that every `image_path` exists
 
 ```bash
-PYTHONPATH=./src python src/scripts/smoke_pipeline.py --workdir ./.smoke_run --seed 42
+python scripts/smoke_pipeline.py --workdir ./runs/smoke/quickstart --seed 42
 ```
 
 Outputs:
-- `./.smoke_run/images/*.png`
-- `./.smoke_run/manifest.csv`
-- `./.smoke_run/manifest_with_splits.csv`
+- `./runs/smoke/quickstart/images/*.png`
+- `./runs/smoke/quickstart/manifest.csv`
+- `./runs/smoke/quickstart/manifest_with_splits.csv`
 
 ### Build a manifest from CBIS-DDSM metadata (no images required)
 
 Download the CBIS-DDSM **Mass** case description CSVs from TCIA and run:
 
 ```bash
-PYTHONPATH=./src python src/scripts/build_manifest_from_cbis_csv.py \
+python scripts/build_manifest_from_cbis_csv.py \
   --mass-train-csv ./mass_case_description_train_set.csv \
   --mass-test-csv ./mass_case_description_test_set.csv \
   --out-manifest ./manifest_cbis_mass.csv
@@ -53,13 +53,25 @@ PYTHONPATH=./src python src/scripts/build_manifest_from_cbis_csv.py \
 
 At this stage, `image_path` is intentionally left empty; you can still validate labels and splits.
 
-### Assign splits + materialize an ImageFolder layout (when images exist)
+### Attach image paths (when images exist)
+
+If your manifest has empty `image_path`, attach file paths by scanning one or more roots:
+
+```bash
+python scripts/attach_image_paths.py \
+  --in-manifest ./manifest_cbis_mass.csv \
+  --out-manifest ./manifest_cbis_mass_attached.csv \
+  --image-root ./processed_png/full_png \
+  --image-root ./processed_png/cropped_png
+```
+
+### Assign splits + materialize an ImageFolder layout
 
 1) Assign patient-level splits into the manifest:
 
 ```bash
-PYTHONPATH=./src python src/scripts/assign_splits.py \
-  --in-manifest ./manifest_cbis_mass.csv \
+python scripts/assign_splits.py \
+  --in-manifest ./manifest_cbis_mass_attached.csv \
   --out-manifest ./manifest_cbis_mass_splits.csv \
   --seed 42 --val-frac 0.1 --test-frac 0.1
 ```
@@ -67,7 +79,7 @@ PYTHONPATH=./src python src/scripts/assign_splits.py \
 2) Materialize a torchvision `ImageFolder` layout (symlinks by default):
 
 ```bash
-PYTHONPATH=./src python src/scripts/materialize_imagefolder.py \
+python scripts/materialize_imagefolder.py \
   --manifest ./manifest_cbis_mass_splits.csv \
   --output-root ./dataset_splits \
   --mode symlink
@@ -82,18 +94,46 @@ dataset_splits/
   test/{BENIGN,MALIGNANT}/*.png
 ```
 
+### End-to-end pipeline runner
+
+For one-command orchestration:
+
+```bash
+python scripts/run_pipeline.py --toy --runs-root ./runs/smoke --run-name demo_toy
+```
+
+Or from an existing manifest, with optional attach stage:
+
+```bash
+python scripts/run_pipeline.py \
+  --in-manifest ./manifest_cbis_mass.csv \
+  --image-root ./processed_png/full_png \
+  --runs-root ./runs/smoke \
+  --run-name demo_real
+```
+
+Useful operational flags:
+- `--skip-attach`, `--skip-crop`, `--skip-cleanup`, `--skip-augment`, `--skip-materialize`, `--skip-eda`
+- `--strict-splits` (fail if any split is empty)
+- `--fail-on-train-error` (fail pipeline when training subprocess fails)
+
+Each run now writes:
+- `run_config.json` (resolved runtime config)
+- `reports/pipeline_summary.json` (stage timings + stage outputs)
+- `reports/image_stats.csv` (unless `--skip-eda`)
+
 ### Train + evaluate models (on ImageFolder `dataset_splits/`)
 
 ResNet50 baseline (trains + evaluates + writes to `runs/`):
 
 ```bash
-python src/training/model_development_and_evaluation.py --data-root ./dataset_splits
+python training/model_development_and_evaluation.py --data-root ./dataset_splits
 ```
 
 Evaluate an existing ResNet checkpoint:
 
 ```bash
-python src/training/model_evaluation.py \
+python training/model_evaluation.py \
   --data-root ./dataset_splits \
   --checkpoint ./runs/resnet50_*/model_best.pth \
   --output-dir ./runs/eval_resnet
@@ -102,7 +142,7 @@ python src/training/model_evaluation.py \
 ConvNeXt staged fine-tuning:
 
 ```bash
-python src/training/model_convnext_absolute.py \
+python training/model_convnext_absolute.py \
   --data-root ./dataset_splits \
   --output-dir ./runs/convnext_stage
 ```
@@ -117,13 +157,21 @@ The canonical columns live in `src/breastcancer_rep/manifest.py` and include:
 - **`image_path`**: path to the image used for training/eval
 - **`split`**: `train` / `val` / `test` (optional until assigned)
 
+Contract checks are enforced by CLIs:
+- labels must be `0` or `1`
+- `sample_id` must be present (and unique per manifest)
+- `patient_id` must be present for split-related stages
+- `image_path` is required for processing/materialization stages
+- `split` is required for ImageFolder materialization
+
 ### Repository layout
 
 - **`src/breastcancer_rep/`**: revival library (manifest IO, splitting, ImageFolder materialization, toy data).
-- **`src/scripts/`**: revival CLIs (smoke pipeline, build manifest, assign splits, materialize ImageFolder).
-- **`src/training/`**: training/evaluation scripts (ResNet, ConvNeXt).
-- **`src/pre-processing/`**: **legacy preprocessing scripts** (Colab-style; kept for reference).
+- **`scripts/`**: revival CLIs (smoke pipeline, build/attach manifest, assign splits, materialize ImageFolder, pipeline runner).
+- **`training/`**: training/evaluation scripts (ResNet, ConvNeXt).
+- **`legacy/colab/`**: legacy Colab preprocessing scripts (kept for provenance and comparison).
 - **`tests/`**: unit/smoke tests for splitting + ImageFolder materialization.
-- **`runs*/`, `./.smoke_run*`, `./.test_*`**: generated outputs from local runs/tests (should not be committed).
+- **`runs/smoke/`**: smoke/demo run outputs.
+- **`runs/test/`**: test-run outputs and test temporary artifacts.
 
 

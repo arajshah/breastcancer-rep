@@ -1,17 +1,10 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-# Allow running without installing the package
-REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = REPO_ROOT / "src"
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
-
-from breastcancer_rep.manifest import read_manifest_csv, write_manifest_csv  # noqa: E402
-from breastcancer_rep.splitting import SplitFractions, assert_no_patient_leakage, assign_patient_splits  # noqa: E402
+from breastcancer_rep.manifest import assert_manifest_contract, read_manifest_csv, write_manifest_csv
+from breastcancer_rep.splitting import SplitFractions, assert_no_patient_leakage, assign_patient_splits
 
 
 def parse_args() -> argparse.Namespace:
@@ -27,8 +20,22 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     rows = read_manifest_csv(args.in_manifest)
+    assert_manifest_contract(
+        rows,
+        require_labels=True,
+        require_patient_ids=True,
+        require_image_paths=False,
+        require_splits=False,
+    )
     rows = assign_patient_splits(rows, seed=args.seed, fractions=SplitFractions(val=args.val_frac, test=args.test_frac))
     assert_no_patient_leakage(rows)
+    assert_manifest_contract(
+        rows,
+        require_labels=True,
+        require_patient_ids=True,
+        require_image_paths=False,
+        require_splits=True,
+    )
     write_manifest_csv(rows, args.out_manifest)
     print("OK: wrote split manifest")
     print(f"- path: {args.out_manifest}")
