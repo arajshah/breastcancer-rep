@@ -1,20 +1,24 @@
 ## breastcancer-rep
 
-Manifest-driven ML pipeline for **breast cancer classification from mammography** using the **CBIS-DDSM Mass** subset (binary: **BENIGN vs MALIGNANT**).
+This repository provides a clear, reproducible workflow for building a **breast cancer classification** dataset and training pipeline from mammography images.
+
+It is designed around the **CBIS-DDSM Mass** subset and a binary target:
+- **BENIGN** (`0`)
+- **MALIGNANT** (`1`)
 
 Dataset reference: [CBIS-DDSM (TCIA collection)](https://www.cancerimagingarchive.net/collection/cbis-ddsm/)
 
 ## What This Repo Does
 
-This repository provides an end-to-end workflow that:
-- builds a canonical manifest from official CBIS metadata
-- attaches local image file paths to manifest rows
-- runs preprocessing (crop, cleanup, augmentation)
-- assigns patient-level train/val/test splits (anti-leakage)
-- materializes torchvision `ImageFolder` datasets
-- exports image stats reports and supports model training/evaluation
+With this repo, you can:
+- build a canonical manifest from official CBIS metadata
+- attach your local image files to that manifest
+- preprocess images (crop, cleanup, augmentation)
+- create patient-level train/val/test splits to avoid leakage
+- materialize a PyTorch-compatible `ImageFolder` dataset
+- run training/evaluation and generate run reports
 
-The manifest is the source of truth throughout the pipeline.
+The manifest is the central data contract across all stages.
 
 ## Repository Structure
 
