@@ -48,7 +48,6 @@ def normalize_pathology(pathology: str) -> tuple[str, int | None]:
     if p in {"MALIGNANT"}:
         return "MALIGNANT", 1
     if p in {"BENIGN", "BENIGN_WITHOUT_CALLBACK"}:
-        # Many papers collapse BENIGN_WITHOUT_CALLBACK into BENIGN.
         return p, 0
     return p, None
 

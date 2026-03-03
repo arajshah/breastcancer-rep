@@ -278,9 +278,6 @@ def subset_rows(rows: list[dict[str, str]], *, seed: int, max_patients: int, max
 
 
 def try_run_training(script: Path, args: list[str]) -> int:
-    """
-    Run a python script if possible. Kept minimal: avoids subprocess flags beyond sys.executable.
-    """
     import subprocess
 
     if not script.exists():
